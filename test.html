@@ -1,19 +1,19 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画像認識ARテスト</title>
+    <title>校舎内 WebAR 学科紹介</title>
 
     <!-- A-Frame と MindAR の読み込み -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
-    <!-- GLTFアニメーション再生用ライブラリ -->
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
 
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; }
         
+        /* 戻るボタン */
         .btn-back {
             position: fixed;
             top: 20px;
@@ -25,44 +25,65 @@
             border-radius: 20px;
             text-decoration: none;
             font-weight: bold;
-            font-size: 20px;
+            font-size: 16px;
             border: 2px solid #ffffff;
         }
 
-        /* --- MindARデフォルトのスキャンUIを無効化 --- */
+        /* 階層切り替えUI（画面上部に配置） */
+        .floor-selector {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            gap: 6px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 6px;
+            border-radius: 20px;
+            border: 2px solid #ffffff;
+        }
+
+        .floor-btn {
+            background: transparent;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 12px;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .floor-btn.active {
+            background: #10b981; /* 選択中の階 */
+            color: white;
+        }
+
         .mindar-ui-overlay, .mindar-ui-scanning {
             display: none !important;
         }
 
-        /* --- 画面全体を覆うUIエリア --- */
+        /* 検出枠アニメーション */
         .scan-overlay {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
             z-index: 10000;
             pointer-events: none;
             opacity: 0;
             transition: opacity 0.2s ease;
         }
 
-        /* 検出時に全体を表示 */
-        .scan-overlay.active {
-            opacity: 1;
-        }
+        .scan-overlay.active { opacity: 1; }
 
-        /* 枠線の共通スタイル */
         .corner {
             position: absolute;
-            width: 60px;
-            height: 60px;
-            border-color: #10b981; /* エメラルドグリーン */
+            width: 60px; height: 60px;
+            border-color: #10b981;
             border-style: solid;
             transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.27);
         }
 
-        /* 角の位置・初期アニメーション位置 */
         .corner-top-left {
             top: 50%; left: 50%;
             border-width: 6px 0 0 6px;
@@ -91,17 +112,14 @@
             transform: translate(calc(50vw - 60px), calc(50vh - 60px));
         }
 
-        /* 検出時（active）：中央に集まる */
         .scan-overlay.active .corner-top-left { transform: translate(-120px, -120px); }
         .scan-overlay.active .corner-top-right { transform: translate(60px, -120px); }
         .scan-overlay.active .corner-bottom-left { transform: translate(-120px, 60px); }
         .scan-overlay.active .corner-bottom-right { transform: translate(60px, 60px); }
 
-        /* 中央メッセージ */
         .scan-message {
             position: absolute;
-            top: 50%;
-            left: 50%;
+            top: 50%; left: 50%;
             transform: translate(-50%, 140px);
             background: rgba(16, 185, 129, 0.95);
             color: #ffffff;
@@ -114,16 +132,14 @@
             border: 2px solid #ffffff;
         }
 
-        /* --- スタンプ獲得ダイアログのCSS --- */
+        /* スタンプポップアップ */
         .stamp-dialog-overlay {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
             background: rgba(0, 0, 0, 0.7);
             z-index: 20000;
-            display: none; /* 通常は非表示 */
+            display: none;
             align-items: center;
             justify-content: center;
             backdrop-filter: blur(5px);
@@ -131,8 +147,7 @@
 
         .stamp-dialog-box {
             background: #ffffff;
-            width: 85%;
-            max-width: 340px;
+            width: 85%; max-width: 340px;
             border-radius: 20px;
             padding: 24px 20px;
             text-align: center;
@@ -150,52 +165,47 @@
 
     <a href="index.html" class="btn-back">← 戻る</a>
 
-    <!-- 画面四角から集まるスキャンUI -->
+    <!-- 階層切り替えUI -->
+    <div class="floor-selector">
+        <button class="floor-btn active" onclick="switchFloor('1f', 'kougyo2.glb', this)">1F</button>
+        <button class="floor-btn" onclick="switchFloor('2f', 'syokutyou.glb', this)">2F</button>
+        <button class="floor-btn" onclick="switchFloor('3f', 'syougyou3.glb', this)">3F</button>
+        <button class="floor-btn" onclick="switchFloor('4f', 'hukude.glb', this)">4F</button>
+        <button class="floor-btn" onclick="switchFloor('5f', 'kougyo2.glb', this)">5F</button>
+    </div>
+
+    <!-- 検出アニメーションUI -->
     <div id="scan-overlay" class="scan-overlay">
         <div class="corner corner-top-left"></div>
         <div class="corner corner-top-right"></div>
         <div class="corner corner-bottom-left"></div>
         <div class="corner corner-bottom-right"></div>
-        <div class="scan-message">🔍 ターゲット検出！</div>
+        <div id="scan-text" class="scan-message">🔍 1F ターゲット検出！</div>
     </div>
 
-    <!-- MindAR シーン -->
+    <!-- 最初は 1f.mind を読み込む -->
     <a-scene 
-    mindar-image="imageTargetSrc: ./1f.mind, ./2f.mind, ./3f.mind, ./4f.mind, ; autoStart: true; uiLoading: no; uiError: no;" 
-    color-space="sRGB" 
-    renderer="colorManagement: true, physicallyCorrectLights" 
-    vr-mode-ui="enabled: false">
-  
-    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+        id="ar-scene"
+        mindar-image="imageTargetSrc: ./1f.mind; autoStart: true; uiLoading: no; uiError: no;" 
+        color-space="sRGB" 
+        renderer="colorManagement: true, physicallyCorrectLights" 
+        vr-mode-ui="enabled: false">
+      
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-    <!-- 1F (1f.mind) -->
-    <a-entity mindar-image-target="targetIndex: 0">
-        <a-entity gltf-model="kougyo2.glb" position="0 0 0" scale="0.1 0.1 0.1"></a-entity>
-    </a-entity>
+        <!-- 動的にモデルとターゲットを切り替える単一エンティティ -->
+        <a-entity mindar-image-target="targetIndex: 0" id="target-object">
+            <a-entity id="ar-model" gltf-model="kougyo2.glb" position="0 0 0" scale="0.1 0.1 0.1" animation-mixer></a-entity>
+        </a-entity>
 
-    <!-- 2F (2f.mind) -->
-    <a-entity mindar-image-target="targetIndex: 1">
-        <a-entity gltf-model="syokutyou.glb" position="0 0 0" scale="0.1 0.1 0.1"></a-entity>
-    </a-entity>
-
-    <!-- 3F (3f.mind) -->
-    <a-entity mindar-image-target="targetIndex: 2">
-        <a-entity gltf-model="syougyou3.glb" position="0 0 0" scale="0.1 0.1 0.1"></a-entity>
-    </a-entity>
-
-    <!-- 4F (4f.mind) -->
-    <a-entity mindar-image-target="targetIndex: 3">
-        <a-entity gltf-model="hukude.glb" position="0 0 0" scale="0.1 0.1 0.1"></a-entity>
-    </a-entity>
-
-</a-scene>
+    </a-scene>
 
     <!-- スタンプ獲得ポップアップ -->
     <div id="stamp-dialog" class="stamp-dialog-overlay">
         <div class="stamp-dialog-box">
             <h3 style="margin-top: 0; color: #059669; font-size: 20px;">🎉 スタンプ獲得！</h3>
-            <p style="font-size: 14px; color: #444; line-height: 1.6; margin-bottom: 20px;">
-                オブジェクトを検出して<br>キャラクターが出現しました！<br>マップを開いて確認しますか？
+            <p id="stamp-msg" style="font-size: 14px; color: #444; line-height: 1.6; margin-bottom: 20px;">
+                オブジェクトを検出して<br>キャラクターが出現しました！
             </p>
             <div style="display: flex; gap: 10px;">
                 <button onclick="closeStampDialog()" style="flex: 1; padding: 10px; border: none; background: #94a3b8; color: white; border-radius: 10px; font-weight: bold; cursor: pointer;">閉じる</button>
@@ -205,21 +215,27 @@
     </div>
 
     <script>
+        let currentFloor = '1F';
+
         window.addEventListener('DOMContentLoaded', () => {
+            setupTargetEvents();
+        });
+
+        function setupTargetEvents() {
             const scanOverlay = document.getElementById('scan-overlay');
             const targetObject = document.getElementById('target-object');
             const stampDialog = document.getElementById('stamp-dialog');
+            const stampMsg = document.getElementById('stamp-msg');
 
             if (targetObject) {
                 targetObject.addEventListener('targetFound', () => {
-                    // 1. スキャン枠アニメーション表示
+                    document.getElementById('scan-text').textContent = `🔍 ${currentFloor} ターゲット検出！`;
                     scanOverlay.classList.add('active');
 
-                    // 2. スタンプ達成の記録
-                    localStorage.setItem('stamp-a-done', '1');
+                    localStorage.setItem(`stamp-${currentFloor}-done`, '1');
 
-                    // 3. Mayaキャラが出現後、3秒待ってからスタンプダイアログを表示
                     setTimeout(() => {
+                        stampMsg.innerHTML = `${currentFloor} のオブジェクトを検出して<br>キャラクターが出現しました！<br>マップを開いて確認しますか？`;
                         stampDialog.style.display = 'flex';
                     }, 3000);
                 });
@@ -228,7 +244,30 @@
                     scanOverlay.classList.remove('active');
                 });
             }
-        });
+        }
+
+        // ボタンで .mind ファイルと 3Dモデル を動的に切り替える関数
+        function switchFloor(floorPrefix, modelName, btnElement) {
+            currentFloor = floorPrefix.toUpperCase();
+
+            // 1. ボタンのアクティブ状態更新
+            document.querySelectorAll('.floor-btn').forEach(btn => btn.classList.remove('active'));
+            btnElement.classList.add('active');
+
+            // 2. モデルの書き換え
+            const arModel = document.getElementById('ar-model');
+            arModel.setAttribute('gltf-model', modelName);
+
+            // 3. MindAR システムを取得して新しい .mind ファイルを再ロード
+            const sceneEl = document.getElementById('ar-scene');
+            const arSystem = sceneEl.systems["mindar-image-system"];
+            
+            if (arSystem) {
+                arSystem.stop();
+                sceneEl.setAttribute('mindar-image', `imageTargetSrc: ./${floorPrefix}.mind; autoStart: true; uiLoading: no; uiError: no;`);
+                arSystem.start();
+            }
+        }
 
         function closeStampDialog() {
             document.getElementById('stamp-dialog').style.display = 'none';
