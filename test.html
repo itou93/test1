@@ -29,7 +29,7 @@
             border: 2px solid #ffffff;
         }
 
-        /* 階層切り替えUI（画面上部に配置） */
+        /* 階層切り替えUI */
         .floor-selector {
             position: fixed;
             top: 20px;
@@ -55,7 +55,7 @@
         }
 
         .floor-btn.active {
-            background: #10b981; /* 選択中の階 */
+            background: #10b981;
             color: white;
         }
 
@@ -167,11 +167,11 @@
 
     <!-- 階層切り替えUI -->
     <div class="floor-selector">
-        <button class="floor-btn active" onclick="switchFloor('1f', 'kougyo2.glb', this)">1F</button>
-        <button class="floor-btn" onclick="switchFloor('2f', 'syokutyou.glb', this)">2F</button>
-        <button class="floor-btn" onclick="switchFloor('3f', 'syougyou3.glb', this)">3F</button>
-        <button class="floor-btn" onclick="switchFloor('4f', 'hukude.glb', this)">4F</button>
-        <button class="floor-btn" onclick="switchFloor('5f', 'kougyo2.glb', this)">5F</button>
+        <button id="btn-1f" class="floor-btn" onclick="switchFloor('1f')">1F</button>
+        <button id="btn-2f" class="floor-btn" onclick="switchFloor('2f')">2F</button>
+        <button id="btn-3f" class="floor-btn" onclick="switchFloor('3f')">3F</button>
+        <button id="btn-4f" class="floor-btn" onclick="switchFloor('4f')">4F</button>
+        <button id="btn-5f" class="floor-btn" onclick="switchFloor('5f')">5F</button>
     </div>
 
     <!-- 検出アニメーションUI -->
@@ -180,25 +180,50 @@
         <div class="corner corner-top-right"></div>
         <div class="corner corner-bottom-left"></div>
         <div class="corner corner-bottom-right"></div>
-        <div id="scan-text" class="scan-message">🔍 1F ターゲット検出！</div>
+        <div id="scan-text" class="scan-message">🔍 ターゲット検出中...</div>
     </div>
 
-    <!-- 最初は 1f.mind を読み込む -->
-    <a-scene 
-        id="ar-scene"
-        mindar-image="imageTargetSrc: ./1f.mind; autoStart: true; uiLoading: no; uiError: no;" 
-        color-space="sRGB" 
-        renderer="colorManagement: true, physicallyCorrectLights" 
-        vr-mode-ui="enabled: false">
-      
-        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+    <!-- URLパラメータから現在の階（デフォルトは 1f）を取得してHTMLを動的構成 -->
+    <script>
+        const floorData = {
+            '1f': { model: 'kougyo2.glb', floorText: '1F' },
+            '2f': { model: 'syokutyou.glb', floorText: '2F' },
+            '3f': { model: 'syougyou3.glb', floorText: '3F' },
+            '4f': { model: 'hukude.glb', floorText: '4F' },
+            '5f': { model: 'kougyo2.glb', floorText: '5F' }
+        };
 
-        <!-- 動的にモデルとターゲットを切り替える単一エンティティ -->
-        <a-entity mindar-image-target="targetIndex: 0" id="target-object">
-            <a-entity id="ar-model" gltf-model="kougyo2.glb" position="0 0 0" scale="0.1 0.1 0.1" animation-mixer></a-entity>
-        </a-entity>
+        const urlParams = new URLSearchParams(window.location.search);
+        let selectedFloor = (urlParams.get('floor') || '1f').toLowerCase();
+        if (!floorData[selectedFloor]) selectedFloor = '1f';
 
-    </a-scene>
+        const currentConfig = floorData[selectedFloor];
+
+        // ページ読み込み時にボタンアクティブ状態を設定
+        window.addEventListener('DOMContentLoaded', () => {
+            const activeBtn = document.getElementById(`btn-${selectedFloor}`);
+            if (activeBtn) activeBtn.classList.add('active');
+            setupTargetEvents();
+        });
+
+        // スマホで安全に初期化できるようにdocument.writeで静的に構築
+        document.write(`
+            <a-scene 
+                id="ar-scene"
+                mindar-image="imageTargetSrc: ./${selectedFloor}.mind; autoStart: true; uiLoading: no; uiError: no; filterMinCF: 0.0001; filterBeta: 0.001;" 
+                color-space="sRGB" 
+                renderer="colorManagement: true, physicallyCorrectLights" 
+                vr-mode-ui="enabled: false"
+                device-orientation-permission-ui="enabled: false">
+              
+                <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+                <a-entity mindar-image-target="targetIndex: 0" id="target-object">
+                    <a-entity id="ar-model" gltf-model="${currentConfig.model}" position="0 0 0" scale="0.1 0.1 0.1" animation-mixer></a-entity>
+                </a-entity>
+            </a-scene>
+        `);
+    </script>
 
     <!-- スタンプ獲得ポップアップ -->
     <div id="stamp-dialog" class="stamp-dialog-overlay">
@@ -215,12 +240,6 @@
     </div>
 
     <script>
-        let currentFloor = '1F';
-
-        window.addEventListener('DOMContentLoaded', () => {
-            setupTargetEvents();
-        });
-
         function setupTargetEvents() {
             const scanOverlay = document.getElementById('scan-overlay');
             const targetObject = document.getElementById('target-object');
@@ -229,13 +248,13 @@
 
             if (targetObject) {
                 targetObject.addEventListener('targetFound', () => {
-                    document.getElementById('scan-text').textContent = `🔍 ${currentFloor} ターゲット検出！`;
+                    document.getElementById('scan-text').textContent = `🔍 ${currentConfig.floorText} ターゲット検出！`;
                     scanOverlay.classList.add('active');
 
-                    localStorage.setItem(`stamp-${currentFloor}-done`, '1');
+                    localStorage.setItem(`stamp-${currentConfig.floorText}-done`, '1');
 
                     setTimeout(() => {
-                        stampMsg.innerHTML = `${currentFloor} のオブジェクトを検出して<br>キャラクターが出現しました！<br>マップを開いて確認しますか？`;
+                        stampMsg.innerHTML = `${currentConfig.floorText} のオブジェクトを検出して<br>キャラクターが出現しました！<br>マップを開いて確認しますか？`;
                         stampDialog.style.display = 'flex';
                     }, 3000);
                 });
@@ -246,27 +265,11 @@
             }
         }
 
-        // ボタンで .mind ファイルと 3Dモデル を動的に切り替える関数
-        function switchFloor(floorPrefix, modelName, btnElement) {
-            currentFloor = floorPrefix.toUpperCase();
-
-            // 1. ボタンのアクティブ状態更新
-            document.querySelectorAll('.floor-btn').forEach(btn => btn.classList.remove('active'));
-            btnElement.classList.add('active');
-
-            // 2. モデルの書き換え
-            const arModel = document.getElementById('ar-model');
-            arModel.setAttribute('gltf-model', modelName);
-
-            // 3. MindAR システムを取得して新しい .mind ファイルを再ロード
-            const sceneEl = document.getElementById('ar-scene');
-            const arSystem = sceneEl.systems["mindar-image-system"];
-            
-            if (arSystem) {
-                arSystem.stop();
-                sceneEl.setAttribute('mindar-image', `imageTargetSrc: ./${floorPrefix}.mind; autoStart: true; uiLoading: no; uiError: no;`);
-                arSystem.start();
-            }
+        // スマホでメモリ・WebGL描画エラーを起こさない確実なページ切替処理
+        function switchFloor(floorPrefix) {
+            if (floorPrefix === selectedFloor) return;
+            const currentPath = window.location.pathname;
+            window.location.href = `${currentPath}?floor=${floorPrefix}`;
         }
 
         function closeStampDialog() {
